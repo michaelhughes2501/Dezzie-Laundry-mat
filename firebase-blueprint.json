@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "Machine": {
+      "title": "Machine",
+      "description": "A single laundry or dryer machine with realtime telemetry and dynamic pricing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique key identifier e.g. M1" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["washer", "dryer"] },
+        "status": { "type": "string", "enum": ["available", "running", "completed", "maintenance", "malfunctioning"] },
+        "minutesLeft": { "type": "integer" },
+        "currentCycle": { "type": "string" },
+        "revenueRate": { "type": "number" },
+        "healthScore": { "type": "integer" },
+        "tempF": { "type": "integer" },
+        "vibrationMmSs": { "type": "number" },
+        "waterFlowLMin": { "type": "number" },
+        "malfunctionReason": { "type": "string" },
+        "usageCount": { "type": "integer" },
+        "efficiencyFactor": { "type": "number" },
+        "dynamicPrice": { "type": "number" },
+        "priceReasons": { "type": "array" },
+        "priceMultiplier": { "type": "number" }
+      },
+      "required": ["id", "name", "type", "status", "minutesLeft", "revenueRate", "healthScore"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A laundry machine slot booking made by a customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "machineId": { "type": "string" },
+        "machineName": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "scheduledTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "active", "completed", "cancelled"] },
+        "amountPaid": { "type": "number" }
+      },
+      "required": ["id", "machineId", "userId", "scheduledTime", "status", "amountPaid"]
+    },
+    "LoyaltyProfile": {
+      "title": "LoyaltyProfile",
+      "description": "User loyalty points, prepaid balances, and personalized marketing segment offer data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "points": { "type": "integer" },
+        "totalVisits": { "type": "integer" },
+        "balance": { "type": "number" },
+        "discountTier": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "VIP"] },
+        "discountRate": { "type": "number" },
+        "segment": { "type": "string" },
+        "avgSpend": { "type": "number" },
+        "personalizedOffer": { "type": "object" }
+      },
+      "required": ["id", "name", "email", "points", "balance", "discountTier", "discountRate"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial ledger record of standard washes, drying rounds, or funds loading topups",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["wash_dry", "topup"] },
+        "amount": { "type": "number" },
+        "discount": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "type", "amount", "discount", "timestamp"]
+    },
+    "MaintenanceTask": {
+      "title": "MaintenanceTask",
+      "description": "Predictive or scheduled technical repairs on the store equipment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "machineId": { "type": "string" },
+        "machineName": { "type": "string" },
+        "assignedTechnician": { "type": "string" },
+        "taskDescription": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "in_progress", "completed"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] }
+      },
+      "required": ["id", "machineId", "assignedTechnician", "status", "priority"]
+    },
+    "SystemNotification": {
+      "title": "SystemNotification",
+      "description": "Warnings, completion pings, and predictive service dispatches alert feed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["alert", "status", "service_request"] },
+        "read": { "type": "boolean" },
+        "machineId": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "title", "message", "type", "read"]
+    },
+    "PricingRules": {
+      "title": "PricingRules",
+      "description": "Dynamic pricing simulator configurations",
+      "type": "object",
+      "properties": {
+        "peakMultiplier": { "type": "number" },
+        "offPeakDiscountRate": { "type": "number" },
+        "simulatedHour": { "type": "integer" },
+        "simulatedDay": { "type": "string" }
+      },
+      "required": ["peakMultiplier", "offPeakDiscountRate", "simulatedHour", "simulatedDay"]
+    }
+  },
+  "firestore": {
+    "/machines/{machineId}": {
+      "schema": "Machine",
+      "description": "Real-time state and sensors of wash/dry machinery"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Laundromat machine bookings records"
+    },
+    "/loyaltyProfiles/{profileId}": {
+      "schema": "LoyaltyProfile",
+      "description": "Prepaid and loyalty ledger of operations users"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Ledger logs of financial collections"
+    },
+    "/maintenanceTasks/{taskId}": {
+      "schema": "MaintenanceTask",
+      "description": "Historic and active corrective maintenance briefs"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "SystemNotification",
+      "description": "System bulletins and operational logs"
+    },
+    "/pricingRules/current": {
+      "schema": "PricingRules",
+      "description": "Global active pricing rules configuration"
+    }
+  }
+}

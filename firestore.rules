@@ -1,0 +1,153 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Global Safety Net ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Phase 3: Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Specific Validators ---
+    function isValidMachine(data) {
+      return data.id is string && data.id.size() <= 64 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.type in ['washer', 'dryer'] &&
+             data.status in ['available', 'running', 'completed', 'maintenance', 'malfunctioning'] &&
+             data.minutesLeft is int &&
+             data.revenueRate is number &&
+             data.revenueRate >= 0.0;
+    }
+
+    function isValidBooking(data) {
+      return data.id is string && data.id.size() <= 64 &&
+             data.machineId is string && data.machineId.size() <= 64 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.scheduledTime is string && data.scheduledTime.size() <= 128 &&
+             data.status in ['pending', 'active', 'completed', 'cancelled'] &&
+             data.amountPaid is number &&
+             data.amountPaid >= 0.0 &&
+             data.userId == request.auth.uid; // Identity validation checks
+    }
+
+    function isValidLoyaltyProfile(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.points is int && data.points >= 0 &&
+             data.balance is number && data.balance >= 0.0 &&
+             data.discountTier in ['Bronze', 'Silver', 'Gold', 'VIP'] &&
+             data.discountRate is number && data.discountRate >= 0.0 &&
+             data.id == request.auth.uid; // Identity validation checks
+    }
+
+    function isValidTransaction(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.type in ['wash_dry', 'topup'] &&
+             data.amount is number && data.amount >= 0.0 &&
+             data.discount is number && data.discount >= 0.0 &&
+             data.timestamp is string &&
+             data.userId == request.auth.uid; // Identity validation checks
+    }
+
+    function isValidMaintenanceTask(data) {
+      return data.id is string && data.id.size() <= 64 &&
+             data.machineId is string && data.machineId.size() <= 64 &&
+             data.assignedTechnician is string && data.assignedTechnician.size() <= 128 &&
+             data.status in ['scheduled', 'in_progress', 'completed'] &&
+             data.priority in ['low', 'medium', 'high'];
+    }
+
+    function isValidSystemNotification(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.timestamp is string &&
+             data.title is string && data.title.size() <= 256 &&
+             data.message is string && data.message.size() <= 1024 &&
+             data.type in ['alert', 'status', 'service_request'] &&
+             data.read is bool;
+    }
+
+    function isValidPricingRules(data) {
+      return data.peakMultiplier is number && data.peakMultiplier >= 0.5 && data.peakMultiplier <= 4.0 &&
+             data.offPeakDiscountRate is number && data.offPeakDiscountRate >= 0.0 && data.offPeakDiscountRate <= 0.9 &&
+             data.simulatedHour is int && data.simulatedHour >= 0 && data.simulatedHour <= 23 &&
+             data.simulatedDay is string && data.simulatedDay.size() <= 32;
+    }
+
+    // --- Match Rules Blocks ---
+
+    match /machines/{machineId} {
+      allow read: if true;
+      allow create, delete: if isVerifiedUser();
+      allow update: if isVerifiedUser() && isValidMachine(incoming());
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isVerifiedUser() && (existing().userId == request.auth.uid);
+      allow list: if isVerifiedUser() && (resource.data.userId == request.auth.uid);
+      allow create: if isVerifiedUser() && isValidBooking(incoming());
+      allow update: if isVerifiedUser() && isValidBooking(incoming()) && (
+        existing().userId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status'])
+      );
+      allow delete: if isVerifiedUser() && (existing().userId == request.auth.uid);
+    }
+
+    match /loyaltyProfiles/{profileId} {
+      allow get: if isVerifiedUser() && (profileId == request.auth.uid);
+      allow list: if isVerifiedUser() && (resource.data.id == request.auth.uid);
+      allow create: if isVerifiedUser() && isValidLoyaltyProfile(incoming());
+      allow update: if isVerifiedUser() && isValidLoyaltyProfile(incoming()) && (
+        profileId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasAny(['points', 'balance', 'discountTier', 'discountRate', 'segment', 'avgSpend', 'personalizedOffer'])
+      );
+      allow delete: if isVerifiedUser() && (profileId == request.auth.uid);
+    }
+
+    match /transactions/{transactionId} {
+      allow get: if isVerifiedUser() && (existing().userId == request.auth.uid);
+      allow list: if isVerifiedUser() && (resource.data.userId == request.auth.uid);
+      allow create: if isVerifiedUser() && isValidTransaction(incoming());
+      allow update, delete: if false; // Financial logs are strictly immutable entries
+    }
+
+    match /maintenanceTasks/{taskId} {
+      allow read: if isVerifiedUser();
+      allow create, update: if isVerifiedUser() && isValidMaintenanceTask(incoming());
+      allow delete: if isVerifiedUser();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isVerifiedUser();
+      allow create: if isVerifiedUser() && isValidSystemNotification(incoming());
+      allow update: if isVerifiedUser() && isValidSystemNotification(incoming()) && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isVerifiedUser();
+    }
+
+    match /pricingRules/current {
+      allow read: if true;
+      allow write: if isVerifiedUser() && isValidPricingRules(incoming());
+    }
+  }
+}
